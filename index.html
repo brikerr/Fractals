@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fractals & Chaos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x221E;</text></svg>">
+<meta name="description" content="Interactive exploration of fractals and chaos theory — from the Mandelbrot set to strange attractors.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Karla:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --font-body: 'Karla', system-ui, sans-serif;
+    --ease: ease-in-out;
+    --ease-out: ease-out;
+    --dur: 400ms;
+    --text: #ffffff; --text-secondary: rgba(255,255,255,0.80); --text-muted: rgba(255,255,255,0.55);
+    --primary: #8ea0ff; --secondary: #d4a0ff; --accent: #70b4ff;
+    --tertiary: #b8a0ff;
+    --border: rgba(255,255,255,0.12); --border-hover: rgba(255,255,255,0.30);
+    --shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.6), 0 0 60px rgba(0,0,0,0.3);
+    --shadow-strong: 0 1px 4px rgba(0,0,0,1), 0 0 30px rgba(0,0,0,0.8), 0 0 80px rgba(0,0,0,0.4);
+    --btn-bg: rgba(0,0,0,0.25); --btn-bg-hover: rgba(0,0,0,0.4);
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body { background: #000; color: var(--text); font-family: var(--font-body); font-size: 14px; overflow: hidden; height: 100dvh; }
+
+  /* ---- Full-viewport fractal layer ---- */
+  .viz { position: fixed; inset: 0; z-index: 1; }
+  #fractalCanvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; display: block; }
+  #overlayCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; display: block; }
+
+  /* ---- Top bar: title + stats (no background) ---- */
+  .top-bar {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 16px 10px;
+    pointer-events: none;
+    opacity: 0; animation: rise 800ms ease-in-out both;
+  }
+  .top-bar * { pointer-events: auto; }
+
+  .header { display: flex; align-items: center; justify-content: center; }
+  .header h1 {
+    font-family: var(--font-display); font-weight: 300; font-style: italic;
+    font-size: clamp(26px, 3.5vw, 40px); line-height: 1.1; letter-spacing: -0.01em;
+    text-shadow: var(--shadow-strong);
+  }
+
+  .stats { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+  .stat {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 0 14px; height: 28px; border: none;
+    background: transparent; cursor: default;
+  }
+  .stat .k {
+    font-size: 9px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--text-muted); text-shadow: var(--shadow);
+  }
+  .stat .v { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-shadow: var(--shadow); }
+  .stat.c-primary .v { color: var(--primary); }
+  .stat.c-secondary .v { color: var(--secondary); }
+
+  /* ---- Bottom bar: controls + legend (no background) ---- */
+  .bottom-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 10px 16px 16px;
+    pointer-events: none;
+    opacity: 0; animation: rise 800ms ease-in-out 300ms both;
+  }
+  .bottom-bar * { pointer-events: auto; }
+
+  .controls {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; flex-wrap: wrap;
+  }
+
+  .btn-group {
+    display: inline-flex; height: 32px; border-radius: 0;
+    border: 1px solid var(--border); overflow: hidden;
+    background: var(--btn-bg); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .btn-group:hover { border-color: var(--border-hover); }
+
+  .gbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 100%; padding: 0 14px; border: none;
+    background: transparent; color: var(--text-muted);
+    font-family: var(--font-body); font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 180ms var(--ease);
+    position: relative; -webkit-tap-highlight-color: transparent;
+    text-shadow: var(--shadow);
+  }
+  .gbtn + .gbtn::before {
+    content: ''; position: absolute; left: 0; top: 28%; height: 44%;
+    width: 1px; background: var(--border); transition: opacity 180ms;
+  }
+  .gbtn:hover { color: var(--text); background: var(--btn-bg-hover); }
+  .gbtn.on { color: var(--text); background: transparent; border-bottom: 2px solid var(--text); }
+  .gbtn.on::before, .gbtn.on + .gbtn::before { opacity: 0; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    height: 28px; padding: 0 10px; border-radius: 0;
+    border: 1px solid var(--border); background: var(--btn-bg);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    font-family: var(--font-body); font-size: 10px; font-weight: 600;
+    cursor: pointer; transition: all 180ms var(--ease);
+    text-shadow: var(--shadow);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .chip .material-symbols-outlined { font-size: 14px; }
+  .chip.temp { color: var(--tertiary); }
+  .chip.temp.on { border-color: var(--tertiary); }
+  .chip.temp:not(.on) { color: var(--text-muted); }
+  .chip.overlay { color: var(--secondary); }
+  .chip.overlay.on { border-color: var(--secondary); }
+  .chip.overlay:not(.on) { color: var(--text-muted); }
+
+  .legend {
+    display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 6px 0 0;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 4px;
+    font-family: var(--font-body); font-size: 9px; font-weight: 600;
+    color: var(--text-muted); cursor: default; padding: 2px 6px;
+    transition: all 180ms var(--ease); text-shadow: var(--shadow);
+  }
+  .legend-item:hover { color: var(--text-secondary); }
+  .legend-item.dimmed { opacity: 0.25; }
+  .legend-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+  .ambiance-btn {
+    position: fixed; bottom: 16px; left: 20px; z-index: 15;
+    opacity: 0; animation: rise 800ms ease-in-out 500ms both;
+  }
+  .cap-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 6px; border: none; background: transparent;
+    font-family: var(--font-body); font-size: 9px; font-weight: 600;
+    color: var(--text-muted); cursor: pointer; transition: all 180ms var(--ease);
+    text-shadow: var(--shadow);
+  }
+  .cap-btn:hover { color: var(--text-secondary); }
+  .cap-btn .material-symbols-outlined { font-size: 12px; }
+  .cap-btn.ambiance-on { color: var(--primary); }
+
+  /* ---- Corner fixed buttons (no background, just shadow) ---- */
+  .tour-btn-fixed {
+    position: fixed; top: 14px; left: 14px; z-index: 50;
+    width: 32px; height: 32px; border: none; border-radius: 0;
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    display: grid; place-items: center;
+    transition: color var(--dur) var(--ease);
+    filter: drop-shadow(0 1px 4px rgba(0,0,0,0.7));
+  }
+  .tour-btn-fixed:hover { color: var(--text); }
+  .tour-btn-fixed .material-symbols-outlined { font-size: 20px; }
+
+  .palette-picker {
+    position: fixed; top: 14px; right: 50px; z-index: 50;
+    height: 32px; display: flex; gap: 6px; align-items: center;
+    filter: drop-shadow(0 1px 4px rgba(0,0,0,0.7));
+  }
+  .palette-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid transparent; cursor: pointer; padding: 0;
+    transition: border-color .2s, transform .15s;
+  }
+  .palette-dot:hover { transform: scale(1.25); }
+  .palette-dot.active { border-color: var(--text); }
+
+  /* ---- Info blurb (bottom-left, no box) ---- */
+  .info-blurb {
+    position: fixed; bottom: 90px; left: 20px; max-width: 220px; z-index: 12;
+    pointer-events: none;
+    opacity: 0; animation: rise 800ms ease-in-out 600ms both;
+  }
+  .info-blurb h3 {
+    font-family: var(--font-display); font-weight: 400; font-style: italic;
+    font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; letter-spacing: -0.01em;
+    text-shadow: var(--shadow-strong);
+  }
+  .info-blurb p {
+    font-family: var(--font-body); font-size: 10px; font-weight: 500;
+    line-height: 1.55; color: var(--text-muted);
+    text-shadow: var(--shadow);
+  }
+
+  /* ---- Julia inset ---- */
+  #juliaInset {
+    position: fixed; top: 80px; right: 16px; width: 160px; height: 160px;
+    border: 1px solid var(--border);
+    z-index: 12; display: none;
+  }
+  #juliaInsetCanvas { width: 100%; height: 100%; display: block; }
+  .julia-label {
+    position: absolute; bottom: 2px; left: 4px;
+    font-family: var(--font-body); font-size: 8px; color: var(--text-muted);
+    text-shadow: var(--shadow);
+  }
+
+  /* ---- 3D height map (bottom-right, no background) ---- */
+  #puck3dContainer {
+    position: fixed; bottom: 80px; right: 16px;
+    width: 320px; height: 320px;
+    pointer-events: auto; z-index: 11; overflow: hidden;
+    opacity: 0; animation: rise 800ms ease-in-out 500ms both;
+  }
+  #puck3dContainer canvas { cursor: grab; display: block; }
+  #puck3dContainer canvas:active { cursor: grabbing; }
+  .rotate-hint {
+    position: absolute; bottom: 4px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    font-family: var(--font-body); font-size: 8px; font-weight: 500;
+    color: var(--text-muted); opacity: 0; letter-spacing: 0.3px;
+    text-shadow: var(--shadow);
+    animation: hintFade 6s ease-in-out 1.5s both; pointer-events: none;
+  }
+  .rotate-hint .material-symbols-outlined { font-size: 11px; }
+
+  /* ---- Tooltip (only element that keeps a subtle backdrop) ---- */
+  .tooltip {
+    position: fixed; z-index: 100; max-width: 240px;
+    padding: 8px 12px; border-radius: 0;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    color: var(--text); font-size: 11px; line-height: 1.4; pointer-events: none;
+    opacity: 0; transition: opacity 180ms var(--ease);
+  }
+  .tooltip.visible { opacity: 1; }
+
+  /* ---- Icons ---- */
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+    user-select: none;
+  }
+
+  /* ---- Animations ---- */
+  @keyframes rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes hintFade { 0% { opacity: 0; } 12% { opacity: 0.5; } 70% { opacity: 0.5; } 100% { opacity: 0; } }
+
+  /* ---- Tour ---- */
+  body.tour-active .tour-btn-fixed { opacity: 0 !important; pointer-events: none; }
+  body.tour-active .stats, body.tour-active .bottom-bar,
+  body.tour-active .palette-picker, body.tour-active .ambiance-btn,
+  body.tour-active #juliaInset {
+    opacity: 0 !important; pointer-events: none; transition: opacity 600ms var(--ease);
+  }
+  body.tour-active #puck3dContainer { pointer-events: none; transition: opacity 600ms var(--ease); }
+  body.tour-active .info-blurb { opacity: 0 !important; }
+
+  .tour-controls {
+    position: fixed; bottom: 16px; right: 20px;
+    display: flex; gap: 6px; z-index: 40;
+    opacity: 0; pointer-events: none; transition: opacity 400ms var(--ease);
+  }
+  body.tour-active .tour-controls { opacity: 1; pointer-events: auto; }
+  .tour-ctrl-btn {
+    width: 30px; height: 30px; border: none; border-radius: 0;
+    background: transparent; color: var(--text-muted); cursor: pointer;
+    display: grid; place-items: center; transition: color 180ms;
+    filter: drop-shadow(0 1px 4px rgba(0,0,0,0.7));
+  }
+  .tour-ctrl-btn:hover { color: var(--text); }
+  .tour-ctrl-btn .material-symbols-outlined { font-size: 16px; }
+
+  .tour-progress {
+    position: fixed; top: 62px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 6px; z-index: 30;
+    opacity: 0; transition: opacity 300ms;
+  }
+  body.tour-active .tour-progress { opacity: 1; }
+  .tour-pip { width: 24px; height: 3px; background: var(--border); }
+  .tour-pip.active { background: var(--primary); }
+  .tour-pip.done { background: var(--secondary); }
+
+  .tour-caption {
+    position: fixed; top: 80px; left: 20px;
+    max-width: 220px; max-height: calc(100vh - 120px); overflow: hidden;
+    z-index: 35; text-align: left;
+    font-family: var(--font-display); font-size: 14px; font-weight: 400; font-style: italic;
+    line-height: 1.7; color: var(--text);
+    text-shadow: var(--shadow-strong);
+    pointer-events: none;
+  }
+
+  .tour-char { display: inline; opacity: 0; filter: blur(3px); transition: opacity 200ms ease-out, filter 280ms ease-out; }
+  .tour-char.revealed { opacity: 1; filter: blur(0); }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 700px) {
+    .top-bar { padding: 6px 50px 6px; }
+    .header h1 { font-size: 22px; }
+    .stat { padding: 0 8px; height: 26px; }
+    .stat .k { font-size: 8px; } .stat .v { font-size: 10px; }
+    .bottom-bar { padding: 6px 8px 8px; }
+    .gbtn { padding: 0 10px; font-size: 11px; }
+    .btn-group { height: 30px; }
+    .chip { height: 26px; font-size: 9px; padding: 0 8px; }
+    #puck3dContainer { width: 180px; height: 180px; bottom: 80px; }
+    .info-blurb { max-width: 180px; bottom: 80px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Full-viewport fractal layer -->
+<div class="viz" id="vizContainer">
+  <canvas id="fractalCanvas"></canvas>
+  <canvas id="overlayCanvas"></canvas>
+</div>
+
+<!-- Corner controls -->
+<button class="tour-btn-fixed" id="tourBtn" aria-label="Start guided tour"><span class="material-symbols-outlined">auto_stories</span></button>
+<div class="palette-picker" id="palettePicker"></div>
+<!-- Top bar: title + stats -->
+<div class="top-bar">
+  <header class="header"><h1>Fractals &amp; Chaos</h1></header>
+  <div class="stats">
+    <div class="stat c-primary" id="statIterPill" data-tooltip="Maximum iteration depth. Higher values reveal finer boundary detail but render slower."><span class="k">Iterations</span><span class="v" id="statIter">256</span></div>
+    <div class="stat c-primary" id="statZoomPill" data-tooltip="Current magnification level. Zoom in to discover self-similar structure at every scale."><span class="k">Zoom</span><span class="v" id="statZoom">1.0x</span></div>
+    <div class="stat c-secondary" id="statCenterPill" data-tooltip="Center coordinate in the complex plane. Real part (horizontal) + imaginary part (vertical)."><span class="k">Center</span><span class="v" id="statCenter">0 + 0i</span></div>
+    <div class="stat" id="statCPill" data-tooltip="The c parameter for Julia sets — or the hovered point in the Mandelbrot set."><span class="k">c</span><span class="v" id="statC">—</span></div>
+    <div class="stat" id="statEscPill" data-tooltip="Escape iteration count at the hovered point. Points inside the set never escape."><span class="k">Escape</span><span class="v" id="statEsc">—</span></div>
+  </div>
+</div>
+
+<!-- Info blurb (bottom-left glass card) -->
+<div class="info-blurb">
+  <h3>The Infinite Boundary</h3>
+  <p>The Mandelbrot set maps the boundary between order and chaos in the complex plane. Each point represents a simple rule — square and add — iterated to infinity. Points that stay bounded are black. Points that escape are colored by how quickly they flee.</p>
+</div>
+
+<!-- Julia inset preview -->
+<div id="juliaInset">
+  <canvas id="juliaInsetCanvas" width="160" height="160"></canvas>
+  <div class="julia-label" id="juliaLabel">Julia preview</div>
+</div>
+
+<!-- 3D height map -->
+<div id="puck3dContainer">
+  <div class="rotate-hint"><span class="material-symbols-outlined">3d_rotation</span>Drag to rotate</div>
+</div>
+
+<!-- Tour controls -->
+<div class="tour-controls" id="tourControlsBar">
+  <button class="tour-ctrl-btn" id="tourPauseBtn"><span class="material-symbols-outlined">pause</span></button>
+  <button class="tour-ctrl-btn" id="tourSkipBtn"><span class="material-symbols-outlined">skip_next</span></button>
+  <button class="tour-ctrl-btn" id="tourExitBtn"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="tour-progress" id="tourProgress"></div>
+
+<!-- Bottom bar: controls + legend -->
+<div class="bottom-bar">
+  <div class="controls">
+    <div class="btn-group" id="fractalGroup">
+      <button class="gbtn on" data-fractal="mandelbrot" data-tooltip="z² + c — the most famous fractal. Maps which c values produce bounded orbits.">Mandelbrot</button>
+      <button class="gbtn" data-fractal="julia" data-tooltip="Same formula, but c is fixed and z₀ varies. Every Mandelbrot point has a corresponding Julia set.">Julia</button>
+      <button class="gbtn" data-fractal="burningShip" data-tooltip="(|Re(z)| + i|Im(z)|)² + c — uses absolute values, creating an asymmetric ship-like form.">Burning Ship</button>
+      <button class="gbtn" data-fractal="newton" data-tooltip="Newton's method applied to z³ − 1. Colors show which of three roots each point converges to.">Newton</button>
+    </div>
+    <button class="chip temp" id="orbitToggle" data-tooltip="Show the iteration orbit path for the point under your cursor."><span class="material-symbols-outlined">timeline</span>Orbits</button>
+    <button class="chip overlay" id="juliaToggle" data-tooltip="Preview the Julia set corresponding to the hovered Mandelbrot point."><span class="material-symbols-outlined">picture_in_picture</span>Julia</button>
+    <button class="chip overlay" id="crosshairToggle" data-tooltip="Show coordinate crosshairs and axis labels on the complex plane."><span class="material-symbols-outlined">my_location</span>Axes</button>
+    <div class="btn-group" id="zoomGroup">
+      <button class="gbtn on" data-zoom="overview" data-tooltip="Full view of the set. The cardioid and period-2 bulb are visible.">Overview</button>
+      <button class="gbtn" data-zoom="seahorse" data-tooltip="Seahorse Valley — spiral structures where the cardioid meets the period-2 bulb.">Seahorse</button>
+      <button class="gbtn" data-zoom="elephant" data-tooltip="Elephant Valley — trunk-like tendrils connecting bulbs along the real axis.">Elephant</button>
+      <button class="gbtn" data-zoom="deep" data-tooltip="Deep zoom into a miniature copy — self-similarity across 10 orders of magnitude.">Deep</button>
+    </div>
+  </div>
+  <div class="legend" id="legendBar">
+    <div class="legend-item" data-legend="interior" data-tooltip="Points inside the set — orbits remain bounded forever under iteration."><div class="legend-dot" style="background:#000;border:1px solid var(--text-muted)"></div>Interior</div>
+    <div class="legend-item" data-legend="exterior" data-tooltip="Points outside the set — orbits escape to infinity. Colored by escape speed."><div class="legend-dot" style="background:var(--primary)"></div>Exterior</div>
+    <div class="legend-item" data-legend="boundary" data-tooltip="The set boundary is infinitely complex — a fractal with Hausdorff dimension 2."><div class="legend-dot" style="background:var(--secondary)"></div>Boundary</div>
+    <div class="legend-item" data-legend="orbit" data-tooltip="The sequence z₀, z₁, z₂... showing how each point evolves under iteration."><div class="legend-dot" style="background:#FFD700"></div>Orbit Path</div>
+    <div class="legend-item" data-legend="julia" data-tooltip="Every point c in the Mandelbrot set defines a unique Julia set. Connected inside, dust outside."><div class="legend-dot" style="background:var(--accent)"></div>Julia Set</div>
+  </div>
+</div>
+
+<button class="ambiance-btn cap-btn" id="ambianceBtn"><span class="material-symbols-outlined">music_note</span>Ambient Sound</button>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ============================================================
+// STATE
+// ============================================================
+var state = {
+  fractalType: 'mandelbrot',
+  centerX: -0.5, centerY: 0.0,
+  zoom: 0.5,
+  maxIter: 256,
+  juliaX: -0.7, juliaY: 0.27,
+  showOrbits: false, showJulia: false, showCrosshair: false,
+  palette: 'electric',
+  highlightedLayer: null,
+  hoveredX: 0, hoveredY: 0,
+  needsRender: true,
+  animZoom: 0.5, animCenterX: -0.5, animCenterY: 0.0,
+  animIter: 256
+};
+
+// ============================================================
+// PALETTES
+// ============================================================
+var PALETTES = {
+  deepSpace: {
+    label: 'Deep Space', dotColor: '#4a6aff',
+    css: { '--bg':'#06080e','--surface':'#0c1018','--surface-hover':'#141a24','--text':'#c8ccd8','--text-secondary':'#7a80a0','--text-muted':'#4a5070','--primary':'#7b8cff','--secondary':'#c084fc','--accent':'#60a5fa','--border':'rgba(123,140,255,0.12)','--border-hover':'rgba(123,140,255,0.25)','--tertiary':'#a78bfa' },
+    shader: { a: [0.02,0.01,0.08], b: [0.45,0.40,0.55], c: [1,1,1], d: [0.0,0.15,0.35] }
+  },
+  inferno: {
+    label: 'Inferno', dotColor: '#ff6a3a',
+    css: { '--bg':'#0e0806','--surface':'#181010','--surface-hover':'#241818','--text':'#d8ccc8','--text-secondary':'#a08070','--text-muted':'#6a5040','--primary':'#ff8c5a','--secondary':'#ffb347','--accent':'#ff6a3a','--border':'rgba(255,140,90,0.12)','--border-hover':'rgba(255,140,90,0.25)','--tertiary':'#ff8c5a' },
+    shader: { a: [0.05,0.0,0.0], b: [0.50,0.35,0.15], c: [1,0.7,0.4], d: [0.0,0.10,0.20] }
+  },
+  frost: {
+    label: 'Frost', dotColor: '#5ac8ff',
+    css: { '--bg':'#060a0e','--surface':'#0c1418','--surface-hover':'#141e24','--text':'#c8d4d8','--text-secondary':'#7090a0','--text-muted':'#405868','--primary':'#5ac8ff','--secondary':'#80e0ff','--accent':'#3ab0e0','--border':'rgba(90,200,255,0.12)','--border-hover':'rgba(90,200,255,0.25)','--tertiary':'#5ac8ff' },
+    shader: { a: [0.02,0.05,0.10], b: [0.35,0.50,0.55], c: [1,1,0.8], d: [0.60,0.70,0.80] }
+  },
+  electric: {
+    label: 'Electric', dotColor: '#a855f7',
+    css: { '--bg':'#0a060e','--surface':'#120c18','--surface-hover':'#1c1424','--text':'#d0c8d8','--text-secondary':'#8a70a0','--text-muted':'#5a4070','--primary':'#a855f7','--secondary':'#ec4899','--accent':'#8b5cf6','--border':'rgba(168,85,247,0.12)','--border-hover':'rgba(168,85,247,0.25)','--tertiary':'#a855f7' },
+    shader: { a: [0.05,0.0,0.10], b: [0.50,0.30,0.55], c: [1,1,1], d: [0.25,0.10,0.35] }
+  },
+  twilight: {
+    label: 'Twilight', dotColor: '#f472b6',
+    css: { '--bg':'#0e0610','--surface':'#180c1a','--surface-hover':'#241424','--text':'#d8c8d0','--text-secondary':'#a07090','--text-muted':'#6a4060','--primary':'#f472b6','--secondary':'#fb923c','--accent':'#e879a8','--border':'rgba(244,114,182,0.12)','--border-hover':'rgba(244,114,182,0.25)','--tertiary':'#f472b6' },
+    shader: { a: [0.05,0.0,0.05], b: [0.45,0.25,0.40], c: [1.5,0.8,1.2], d: [0.40,0.15,0.30] }
+  }
+};
+
+// Populate palette picker
+var pickerEl = document.getElementById('palettePicker');
+Object.keys(PALETTES).forEach(function(key) {
+  var dot = document.createElement('div');
+  dot.className = 'palette-dot' + (key === state.palette ? ' active' : '');
+  dot.style.background = PALETTES[key].dotColor;
+  dot.dataset.palette = key;
+  dot.title = PALETTES[key].label;
+  pickerEl.appendChild(dot);
+});
+
+// ============================================================
+// ZOOM PRESETS
+// ============================================================
+var zoomPresets = {
+  overview:  { cx: -0.5, cy: 0.0, zoom: 0.5, iter: 256 },
+  seahorse:  { cx: -0.7463, cy: 0.1102, zoom: 80, iter: 512 },
+  elephant:  { cx: 0.2819, cy: 0.0100, zoom: 40, iter: 512 },
+  deep:      { cx: -0.7436438870371587, cy: 0.1318259042053119, zoom: 100000, iter: 1024 }
+};
+
+// ============================================================
+// FRACTAL CONFIGS
+// ============================================================
+var fractalConfigs = {
+  mandelbrot: { type: 0, defaultCenter: [-0.5, 0], defaultZoom: 0.3, defaultIter: 256, name: 'Mandelbrot Set', formula: 'z² + c' },
+  julia:      { type: 1, defaultCenter: [0, 0], defaultZoom: 0.35, defaultIter: 256, name: 'Julia Set', formula: 'z² + c (fixed c)' },
+  burningShip:{ type: 2, defaultCenter: [-0.4, -0.5], defaultZoom: 0.3, defaultIter: 256, name: 'Burning Ship', formula: '(|Re(z)| + i|Im(z)|)² + c' },
+  newton:     { type: 3, defaultCenter: [0, 0], defaultZoom: 0.6, defaultIter: 80, name: "Newton's Method", formula: 'z − (z³−1)/(3z²)' }
+};
+
+// ============================================================
+// URL STATE
+// ============================================================
+var urlDefaults = { fractal: 'mandelbrot', cx: -0.5, cy: 0, zoom: 0.5, iter: 256, palette: 'electric', jx: -0.7, jy: 0.27 };
+
+function loadStateFromURL() {
+  var p = new URLSearchParams(window.location.search);
+  if (p.has('fractal') && fractalConfigs[p.get('fractal')]) state.fractalType = p.get('fractal');
+  if (p.has('cx')) { var v = parseFloat(p.get('cx')); if (isFinite(v)) { state.centerX = v; state.animCenterX = v; } }
+  if (p.has('cy')) { var v = parseFloat(p.get('cy')); if (isFinite(v)) { state.centerY = v; state.animCenterY = v; } }
+  if (p.has('zoom')) { var v = parseFloat(p.get('zoom')); if (isFinite(v) && v > 0) { state.zoom = v; state.animZoom = v; } }
+  if (p.has('iter')) { var v = parseInt(p.get('iter')); if (isFinite(v) && v > 0) { state.maxIter = v; state.animIter = v; } }
+  if (p.has('palette') && PALETTES[p.get('palette')]) state.palette = p.get('palette');
+  if (p.has('jx')) { var v = parseFloat(p.get('jx')); if (isFinite(v)) state.juliaX = v; }
+  if (p.has('jy')) { var v = parseFloat(p.get('jy')); if (isFinite(v)) state.juliaY = v; }
+}
+loadStateFromURL();
+
+function pushStateToURL() {
+  var p = new URLSearchParams();
+  if (state.fractalType !== urlDefaults.fractal) p.set('fractal', state.fractalType);
+  if (Math.abs(state.centerX - urlDefaults.cx) > 1e-10) p.set('cx', state.centerX);
+  if (Math.abs(state.centerY - urlDefaults.cy) > 1e-10) p.set('cy', state.centerY);
+  if (Math.abs(state.zoom - urlDefaults.zoom) > 1e-6) p.set('zoom', state.zoom);
+  if (state.maxIter !== urlDefaults.iter) p.set('iter', state.maxIter);
+  if (state.palette !== urlDefaults.palette) p.set('palette', state.palette);
+  var qs = p.toString();
+  history.replaceState(null, '', qs ? '?' + qs : location.pathname);
+}
+
+// ============================================================
+// APPLY PALETTE
+// ============================================================
+function applyPalette() {
+  var p = PALETTES[state.palette];
+  var vars = p.css;
+  var root = document.documentElement;
+  Object.keys(vars).forEach(function(k) { root.style.setProperty(k, vars[k]); });
+  document.querySelectorAll('.palette-dot').forEach(function(d) { d.classList.toggle('active', d.dataset.palette === state.palette); });
+  state.needsRender = true;
+  if (typeof scheduleHeightMapUpdate === 'function') scheduleHeightMapUpdate();
+}
+applyPalette();
+
+// ============================================================
+// EVENT HANDLERS
+// ============================================================
+// Palette picker
+document.getElementById('palettePicker').addEventListener('click', function(e) {
+  var dot = e.target.closest('.palette-dot');
+  if (!dot || !dot.dataset.palette) return;
+  state.palette = dot.dataset.palette;
+  applyPalette();
+  pushStateToURL();
+});
+
+// Fractal type
+document.getElementById('fractalGroup').addEventListener('click', function(e) {
+  var btn = e.target.closest('.gbtn');
+  if (!btn || !btn.dataset.fractal) return;
+  var fType = btn.dataset.fractal;
+  if (fType === state.fractalType) return;
+  state.fractalType = fType;
+  var cfg = fractalConfigs[fType];
+  state.centerX = cfg.defaultCenter[0]; state.centerY = cfg.defaultCenter[1];
+  state.zoom = cfg.defaultZoom; state.maxIter = cfg.defaultIter;
+  this.querySelectorAll('.gbtn').forEach(function(b) { b.classList.toggle('on', b.dataset.fractal === fType); });
+  document.querySelectorAll('#zoomGroup .gbtn').forEach(function(b) { b.classList.toggle('on', b.dataset.zoom === 'overview'); });
+  state.needsRender = true;
+  updateStats();
+  pushStateToURL();
+  scheduleHeightMapUpdate();
+});
+
+// Zoom presets
+document.getElementById('zoomGroup').addEventListener('click', function(e) {
+  var btn = e.target.closest('.gbtn');
+  if (!btn || !btn.dataset.zoom) return;
+  var preset = zoomPresets[btn.dataset.zoom];
+  if (!preset) return;
+  state.centerX = preset.cx; state.centerY = preset.cy;
+  state.zoom = preset.zoom; state.maxIter = preset.iter;
+  this.querySelectorAll('.gbtn').forEach(function(b) { b.classList.toggle('on', b.dataset.zoom === btn.dataset.zoom); });
+  if (state.fractalType !== 'mandelbrot') {
+    state.fractalType = 'mandelbrot';
+    document.querySelectorAll('#fractalGroup .gbtn').forEach(function(b) { b.classList.toggle('on', b.dataset.fractal === 'mandelbrot'); });
+  }
+  state.needsRender = true;
+  updateStats();
+  pushStateToURL();
+  scheduleHeightMapUpdate();
+});
+
+// Toggle chips
+document.getElementById('orbitToggle').addEventListener('click', function() {
+  state.showOrbits = !state.showOrbits; this.classList.toggle('on');
+});
+document.getElementById('juliaToggle').addEventListener('click', function() {
+  state.showJulia = !state.showJulia; this.classList.toggle('on');
+  document.getElementById('juliaInset').style.display = state.showJulia ? 'block' : 'none';
+});
+document.getElementById('crosshairToggle').addEventListener('click', function() {
+  state.showCrosshair = !state.showCrosshair; this.classList.toggle('on');
+});
+
+// Tooltip system
+var tooltipEl = document.getElementById('tooltip');
+var tooltipTimer = null;
+document.addEventListener('mouseover', function(e) {
+  var el = e.target.closest('[data-tooltip]');
+  if (!el) { tooltipEl.classList.remove('visible'); clearTimeout(tooltipTimer); return; }
+  clearTimeout(tooltipTimer);
+  tooltipTimer = setTimeout(function() {
+    tooltipEl.textContent = el.dataset.tooltip;
+    var r = el.getBoundingClientRect();
+    var showAbove = el.closest('.controls') || el.closest('.stats') || el.closest('.legend');
+    if (showAbove) {
+      tooltipEl.style.left = Math.min(r.left, window.innerWidth - 270) + 'px';
+      tooltipEl.style.top = (r.top - 8) + 'px';
+      tooltipEl.style.transform = 'translateY(-100%)';
+    } else {
+      tooltipEl.style.left = Math.min(r.left, window.innerWidth - 270) + 'px';
+      tooltipEl.style.top = (r.bottom + 8) + 'px';
+      tooltipEl.style.transform = 'none';
+    }
+    tooltipEl.classList.add('visible');
+  }, 400);
+});
+document.addEventListener('mouseout', function(e) {
+  if (e.target.closest('[data-tooltip]')) { tooltipEl.classList.remove('visible'); clearTimeout(tooltipTimer); }
+});
+
+// Legend highlights
+document.getElementById('legendBar').addEventListener('click', function(e) {
+  var item = e.target.closest('.legend-item');
+  if (!item) return;
+  var layer = item.dataset.legend;
+  state.highlightedLayer = state.highlightedLayer === layer ? null : layer;
+  document.querySelectorAll('.legend-item').forEach(function(el) {
+    el.classList.toggle('dimmed', state.highlightedLayer && el.dataset.legend !== state.highlightedLayer);
+  });
+});
+
+// ============================================================
+// STATS UPDATE
+// ============================================================
+function formatZoom(z) {
+  if (z >= 1e6) return (z / 1e6).toFixed(1) + 'M\u00D7';
+  if (z >= 1e3) return (z / 1e3).toFixed(1) + 'K\u00D7';
+  return z.toFixed(1) + '\u00D7';
+}
+function formatComplex(re, im) {
+  var r = Math.abs(re) < 0.0001 ? '0' : re.toFixed(4);
+  var i = Math.abs(im) < 0.0001 ? '0' : Math.abs(im).toFixed(4);
+  if (i === '0') return r;
+  return r + (im >= 0 ? ' + ' : ' \u2212 ') + i + 'i';
+}
+function updateStats() {
+  document.getElementById('statIter').textContent = state.maxIter;
+  document.getElementById('statZoom').textContent = formatZoom(state.zoom);
+  document.getElementById('statCenter').textContent = formatComplex(state.centerX, state.centerY);
+}
+updateStats();
+
+// ============================================================
+// WEBGL FRACTAL RENDERER
+// ============================================================
+var glCanvas = document.getElementById('fractalCanvas');
+var gl = glCanvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: true });
+
+var vertSrc = 'attribute vec2 a_pos; void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }';
+
+var fragSrc = [
+'precision highp float;',
+'uniform vec2 u_resolution;',
+'uniform vec2 u_center;',
+'uniform float u_zoom;',
+'uniform float u_maxIter;',
+'uniform int u_fractalType;',
+'uniform vec2 u_juliaC;',
+'uniform vec3 u_palA, u_palB, u_palC, u_palD;',
+'uniform float u_interiorR, u_interiorG, u_interiorB;',
+'',
+'vec3 palette(float t) {',
+'  return u_palA + u_palB * cos(6.28318 * (u_palC * t + u_palD));',
+'}',
+'',
+'void main() {',
+'  vec2 uv = (gl_FragCoord.xy - u_resolution * 0.5) / min(u_resolution.x, u_resolution.y);',
+'  vec2 c = uv / u_zoom + u_center;',
+'  vec2 z = vec2(0.0);',
+'  float iter = 0.0;',
+'  float closest = -1.0;',
+'  float xnew = 0.0;',
+'  float ynew = 0.0;',
+'',
+'  if (u_fractalType == 0) {',
+'    for (int i = 0; i < 2048; i++) {',
+'      if (float(i) >= u_maxIter) break;',
+'      xnew = z.x*z.x - z.y*z.y + c.x;',
+'      ynew = 2.0*z.x*z.y + c.y;',
+'      z = vec2(xnew, ynew);',
+'      if (dot(z,z) > 256.0) break;',
+'      iter += 1.0;',
+'    }',
+'  }',
+'  else if (u_fractalType == 1) {',
+'    z = c;',
+'    for (int i = 0; i < 2048; i++) {',
+'      if (float(i) >= u_maxIter) break;',
+'      xnew = z.x*z.x - z.y*z.y + u_juliaC.x;',
+'      ynew = 2.0*z.x*z.y + u_juliaC.y;',
+'      z = vec2(xnew, ynew);',
+'      if (dot(z,z) > 256.0) break;',
+'      iter += 1.0;',
+'    }',
+'  }',
+'  else if (u_fractalType == 2) {',
+'    for (int i = 0; i < 2048; i++) {',
+'      if (float(i) >= u_maxIter) break;',
+'      z = vec2(abs(z.x), abs(z.y));',
+'      xnew = z.x*z.x - z.y*z.y + c.x;',
+'      ynew = 2.0*z.x*z.y + c.y;',
+'      z = vec2(xnew, ynew);',
+'      if (dot(z,z) > 256.0) break;',
+'      iter += 1.0;',
+'    }',
+'  }',
+'  else {',
+'    z = c;',
+'    float z2x = 0.0; float z2y = 0.0;',
+'    float z3x = 0.0; float z3y = 0.0;',
+'    float fx = 0.0; float fy = 0.0;',
+'    float fpx = 0.0; float fpy = 0.0;',
+'    float dn = 0.0;',
+'    float dx = 0.0; float dy = 0.0;',
+'    for (int i = 0; i < 2048; i++) {',
+'      if (float(i) >= u_maxIter) break;',
+'      z2x = z.x*z.x - z.y*z.y;',
+'      z2y = 2.0*z.x*z.y;',
+'      z3x = z2x*z.x - z2y*z.y;',
+'      z3y = z2x*z.y + z2y*z.x;',
+'      fx = z3x - 1.0;',
+'      fy = z3y;',
+'      fpx = 3.0 * z2x;',
+'      fpy = 3.0 * z2y;',
+'      dn = fpx*fpx + fpy*fpy;',
+'      if (dn < 1e-12) break;',
+'      z.x = z.x - (fx*fpx + fy*fpy) / dn;',
+'      z.y = z.y - (fy*fpx - fx*fpy) / dn;',
+'      dx = z.x - 1.0; dy = z.y;',
+'      if (dx*dx + dy*dy < 1e-6) { closest = 0.0; break; }',
+'      dx = z.x + 0.5; dy = z.y - 0.866025;',
+'      if (dx*dx + dy*dy < 1e-6) { closest = 1.0; break; }',
+'      dx = z.x + 0.5; dy = z.y + 0.866025;',
+'      if (dx*dx + dy*dy < 1e-6) { closest = 2.0; break; }',
+'      iter += 1.0;',
+'    }',
+'  }',
+'',
+'  if (u_fractalType == 3) {',
+'    float t = clamp(iter / u_maxIter, 0.0, 1.0);',
+'    float offset = 0.0;',
+'    if (closest > 0.5 && closest < 1.5) offset = 0.33;',
+'    else if (closest > 1.5) offset = 0.67;',
+'    vec3 col = palette(sqrt(max(t, 0.0)) * 1.5 + offset);',
+'    float brightness = clamp(1.0 - t * 1.5, 0.25, 1.0);',
+'    gl_FragColor = vec4(col * brightness, 1.0);',
+'  } else if (iter >= u_maxIter) {',
+'    gl_FragColor = vec4(u_interiorR, u_interiorG, u_interiorB, 1.0);',
+'  } else {',
+'    float smoothIter = iter - log2(log2(max(dot(z, z), 1.0))) + 4.0;',
+'    float t = smoothIter / u_maxIter;',
+'    gl_FragColor = vec4(palette(sqrt(max(t, 0.0)) * 2.5), 1.0);',
+'  }',
+'}'
+].join('\n');
+
+function compileShader(src, type) {
+  var s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    var err = gl.getShaderInfoLog(s);
+    console.error('Shader error:', err);
+    // Show error on page
+    var errEl = document.createElement('div');
+    errEl.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,0,0,0.9);color:#fff;padding:20px;z-index:9999;font:14px monospace;max-width:80%;white-space:pre-wrap;';
+    errEl.textContent = 'GLSL Error:\n' + err;
+    document.body.appendChild(errEl);
+    return null;
+  }
+  return s;
+}
+var vs = compileShader(vertSrc, gl.VERTEX_SHADER);
+var fs = compileShader(fragSrc, gl.FRAGMENT_SHADER);
+if (!vs || !fs) { console.error('Shader compilation failed'); }
+var prog = gl.createProgram();
+if (vs) gl.attachShader(prog, vs);
+if (fs) gl.attachShader(prog, fs);
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+  var linkErr = gl.getProgramInfoLog(prog);
+  console.error('Link:', linkErr);
+  var errEl2 = document.createElement('div');
+  errEl2.style.cssText = 'position:fixed;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(255,0,0,0.9);color:#fff;padding:20px;z-index:9999;font:14px monospace;max-width:80%;';
+  errEl2.textContent = 'Link Error:\n' + linkErr;
+  document.body.appendChild(errEl2);
+}
+gl.useProgram(prog);
+
+// Fullscreen quad
+var buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+var aPos = gl.getAttribLocation(prog, 'a_pos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+// Uniform locations
+var u = {};
+['u_resolution','u_center','u_zoom','u_maxIter','u_fractalType','u_juliaC','u_palA','u_palB','u_palC','u_palD','u_interiorR','u_interiorG','u_interiorB'].forEach(function(name) {
+  u[name] = gl.getUniformLocation(prog, name);
+});
+
+function renderFractal() {
+  var rect = glCanvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  var dpr = Math.min(window.devicePixelRatio, 2);
+  var w = Math.round(rect.width * dpr);
+  var h = Math.round(rect.height * dpr);
+  if (glCanvas.width !== w || glCanvas.height !== h) {
+    glCanvas.width = w; glCanvas.height = h;
+  }
+  gl.viewport(0, 0, w, h);
+
+  var pal = PALETTES[state.palette].shader;
+  var interior = [0, 0, 0];
+
+  gl.uniform2f(u.u_resolution, w, h);
+  gl.uniform2f(u.u_center, state.animCenterX, state.animCenterY);
+  gl.uniform1f(u.u_zoom, state.animZoom);
+  gl.uniform1f(u.u_maxIter, state.animIter);
+  gl.uniform1i(u.u_fractalType, fractalConfigs[state.fractalType].type);
+  gl.uniform2f(u.u_juliaC, state.juliaX, state.juliaY);
+  gl.uniform3f(u.u_palA, pal.a[0], pal.a[1], pal.a[2]);
+  gl.uniform3f(u.u_palB, pal.b[0], pal.b[1], pal.b[2]);
+  gl.uniform3f(u.u_palC, pal.c[0], pal.c[1], pal.c[2]);
+  gl.uniform3f(u.u_palD, pal.d[0], pal.d[1], pal.d[2]);
+  gl.uniform1f(u.u_interiorR, interior[0]);
+  gl.uniform1f(u.u_interiorG, interior[1]);
+  gl.uniform1f(u.u_interiorB, interior[2]);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  state.needsRender = false;
+}
+
+// ============================================================
+// MOUSE INTERACTION (zoom, pan, hover)
+// ============================================================
+var overlayCanvas = document.getElementById('overlayCanvas');
+var overlayCtx = overlayCanvas.getContext('2d');
+var isDragging = false, dragStartX = 0, dragStartY = 0, dragCX = 0, dragCY = 0;
+
+function screenToComplex(sx, sy) {
+  var rect = glCanvas.getBoundingClientRect();
+  var w = rect.width, h = rect.height;
+  var minDim = Math.min(w, h);
+  var ux = (sx - w * 0.5) / minDim;
+  var uy = -(sy - h * 0.5) / minDim;
+  return { re: ux / state.animZoom + state.animCenterX, im: uy / state.animZoom + state.animCenterY };
+}
+
+function complexToScreen(re, im) {
+  var rect = glCanvas.getBoundingClientRect();
+  var w = rect.width, h = rect.height;
+  var minDim = Math.min(w, h);
+  var ux = (re - state.animCenterX) * state.animZoom;
+  var uy = (im - state.animCenterY) * state.animZoom;
+  return { x: ux * minDim + w * 0.5, y: -uy * minDim + h * 0.5 };
+}
+
+glCanvas.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  var rect = glCanvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  var pt = screenToComplex(mx, my);
+  var factor = e.deltaY > 0 ? 0.8 : 1.25;
+  state.zoom *= factor;
+  state.centerX = pt.re + (state.centerX - pt.re) / factor;
+  state.centerY = pt.im + (state.centerY - pt.im) / factor;
+  if (state.zoom > 1000) state.maxIter = Math.max(state.maxIter, 512);
+  if (state.zoom > 100000) state.maxIter = Math.max(state.maxIter, 1024);
+  state.needsRender = true;
+  updateStats();
+  pushStateToURL();
+}, { passive: false });
+
+glCanvas.addEventListener('mousedown', function(e) {
+  isDragging = true;
+  dragStartX = e.clientX; dragStartY = e.clientY;
+  dragCX = state.centerX; dragCY = state.centerY;
+  glCanvas.style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', function(e) {
+  if (isDragging) {
+    var rect = glCanvas.getBoundingClientRect();
+    var minDim = Math.min(rect.width, rect.height);
+    var dx = (e.clientX - dragStartX) / minDim / state.animZoom;
+    var dy = (e.clientY - dragStartY) / minDim / state.animZoom;
+    state.centerX = dragCX - dx;
+    state.centerY = dragCY + dy;
+    state.needsRender = true;
+    updateStats();
+    return;
+  }
+  var rect = glCanvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  if (mx < 0 || my < 0 || mx > rect.width || my > rect.height) return;
+  var pt = screenToComplex(mx, my);
+  state.hoveredX = pt.re; state.hoveredY = pt.im;
+  document.getElementById('statC').textContent = formatComplex(pt.re, pt.im);
+  var esc = computeEscape(pt.re, pt.im);
+  document.getElementById('statEsc').textContent = esc >= state.maxIter ? '\u221E (interior)' : esc;
+});
+window.addEventListener('mouseup', function() {
+  if (isDragging) {
+    isDragging = false;
+    glCanvas.style.cursor = 'crosshair';
+    pushStateToURL();
+  }
+});
+
+glCanvas.addEventListener('dblclick', function(e) {
+  var rect = glCanvas.getBoundingClientRect();
+  var pt = screenToComplex(e.clientX - rect.left, e.clientY - rect.top);
+  state.centerX = pt.re; state.centerY = pt.im;
+  state.zoom *= 3;
+  if (state.zoom > 1000) state.maxIter = Math.max(state.maxIter, 512);
+  state.needsRender = true;
+  updateStats();
+  pushStateToURL();
+});
+
+function computeEscape(cre, cim) {
+  var zr = 0, zi = 0, tr, iter = 0;
+  var cfg = fractalConfigs[state.fractalType];
+  if (cfg.type === 1) { zr = cre; zi = cim; cre = state.juliaX; cim = state.juliaY; }
+  for (; iter < state.maxIter; iter++) {
+    if (cfg.type === 2) { zr = Math.abs(zr); zi = Math.abs(zi); }
+    tr = zr * zr - zi * zi + cre;
+    zi = 2 * zr * zi + cim;
+    zr = tr;
+    if (zr * zr + zi * zi > 256) return iter;
+  }
+  return iter;
+}
+
+function computeOrbit(cre, cim, maxSteps) {
+  var pts = [];
+  var zr = 0, zi = 0, tr;
+  var cfg = fractalConfigs[state.fractalType];
+  if (cfg.type === 1) { zr = cre; zi = cim; cre = state.juliaX; cim = state.juliaY; }
+  if (cfg.type === 3) { zr = cre; zi = cim; }
+  pts.push({ re: zr, im: zi });
+  for (var i = 0; i < maxSteps; i++) {
+    if (cfg.type === 3) {
+      var z2r = zr*zr - zi*zi, z2i = 2*zr*zi;
+      var z3r = z2r*zr - z2i*zi, z3i = z2r*zi + z2i*zr;
+      var fr = z3r - 1, fi = z3i;
+      var fpr = 3*z2r, fpi = 3*z2i;
+      var d = fpr*fpr + fpi*fpi;
+      if (d < 1e-12) break;
+      zr = zr - (fr*fpr + fi*fpi)/d;
+      zi = zi - (fi*fpr - fr*fpi)/d;
+    } else {
+      if (cfg.type === 2) { zr = Math.abs(zr); zi = Math.abs(zi); }
+      tr = zr*zr - zi*zi + cre;
+      zi = 2*zr*zi + cim;
+      zr = tr;
+    }
+    pts.push({ re: zr, im: zi });
+    if (zr*zr + zi*zi > 256) break;
+  }
+  return pts;
+}
+
+// ============================================================
+// OVERLAY CANVAS (orbits, crosshairs, axes)
+// ============================================================
+function resizeOverlay() {
+  var rect = overlayCanvas.parentElement.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+  var dpr = Math.min(window.devicePixelRatio, 2);
+  overlayCanvas.width = Math.round(rect.width * dpr);
+  overlayCanvas.height = Math.round(rect.height * dpr);
+  overlayCanvas.style.width = rect.width + 'px';
+  overlayCanvas.style.height = rect.height + 'px';
+  overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function drawOverlay() {
+  var rect = overlayCanvas.parentElement.getBoundingClientRect();
+  var w = rect.width, h = rect.height;
+  if (w === 0 || h === 0) return;
+  overlayCtx.clearRect(0, 0, w, h);
+
+  if (state.showCrosshair) {
+    var origin = complexToScreen(0, 0);
+    overlayCtx.strokeStyle = 'rgba(255,255,255,0.15)';
+    overlayCtx.lineWidth = 1;
+    overlayCtx.beginPath(); overlayCtx.moveTo(0, origin.y); overlayCtx.lineTo(w, origin.y); overlayCtx.stroke();
+    overlayCtx.beginPath(); overlayCtx.moveTo(origin.x, 0); overlayCtx.lineTo(origin.x, h); overlayCtx.stroke();
+    overlayCtx.font = '10px Karla, sans-serif';
+    overlayCtx.fillStyle = 'rgba(255,255,255,0.35)';
+    if (origin.x > 20 && origin.x < w - 20) {
+      overlayCtx.fillText('Re', w - 20, origin.y - 6);
+      overlayCtx.fillText('Im', origin.x + 6, 16);
+    }
+    var step = chooseTick(1 / state.animZoom * 2);
+    var minRe = screenToComplex(0, h/2).re, maxRe = screenToComplex(w, h/2).re;
+    var minIm = screenToComplex(w/2, h).im, maxIm = screenToComplex(w/2, 0).im;
+    overlayCtx.fillStyle = 'rgba(255,255,255,0.25)';
+    for (var t = Math.ceil(minRe / step) * step; t <= maxRe; t += step) {
+      if (Math.abs(t) < step * 0.01) continue;
+      var sp = complexToScreen(t, 0);
+      overlayCtx.beginPath(); overlayCtx.moveTo(sp.x, origin.y - 4); overlayCtx.lineTo(sp.x, origin.y + 4); overlayCtx.stroke();
+      overlayCtx.fillText(t.toPrecision(3), sp.x + 2, origin.y + 14);
+    }
+    for (var t2 = Math.ceil(minIm / step) * step; t2 <= maxIm; t2 += step) {
+      if (Math.abs(t2) < step * 0.01) continue;
+      var sp2 = complexToScreen(0, t2);
+      overlayCtx.beginPath(); overlayCtx.moveTo(origin.x - 4, sp2.y); overlayCtx.lineTo(origin.x + 4, sp2.y); overlayCtx.stroke();
+      overlayCtx.fillText(t2.toPrecision(3) + 'i', origin.x + 6, sp2.y + 4);
+    }
+  }
+
+  if (state.showOrbits && !isDragging) {
+    var orbit = computeOrbit(state.hoveredX, state.hoveredY, Math.min(state.maxIter, 200));
+    if (orbit.length > 1) {
+      overlayCtx.strokeStyle = 'rgba(255,215,0,0.6)';
+      overlayCtx.lineWidth = 1;
+      overlayCtx.setLineDash([3, 3]);
+      overlayCtx.beginPath();
+      for (var oi = 0; oi < orbit.length; oi++) {
+        var sp3 = complexToScreen(orbit[oi].re, orbit[oi].im);
+        if (oi === 0) overlayCtx.moveTo(sp3.x, sp3.y);
+        else overlayCtx.lineTo(sp3.x, sp3.y);
+      }
+      overlayCtx.stroke();
+      overlayCtx.setLineDash([]);
+      for (var oi2 = 0; oi2 < orbit.length; oi2++) {
+        var sp4 = complexToScreen(orbit[oi2].re, orbit[oi2].im);
+        if (sp4.x < -20 || sp4.x > w + 20 || sp4.y < -20 || sp4.y > h + 20) continue;
+        overlayCtx.beginPath();
+        overlayCtx.arc(sp4.x, sp4.y, oi2 === 0 ? 3 : 2, 0, Math.PI * 2);
+        overlayCtx.fillStyle = oi2 === 0 ? 'rgba(255,215,0,1)' : 'rgba(255,215,0,0.5)';
+        overlayCtx.fill();
+      }
+    }
+  }
+}
+
+function chooseTick(range) {
+  var raw = range / 5;
+  var mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  var norm = raw / mag;
+  if (norm < 2) return mag;
+  if (norm < 5) return 2 * mag;
+  return 5 * mag;
+}
+
+// ============================================================
+// JULIA INSET PREVIEW
+// ============================================================
+var juliaInsetCanvas = document.getElementById('juliaInsetCanvas');
+var juliaCtx = juliaInsetCanvas.getContext('2d');
+var juliaSize = 180;
+juliaInsetCanvas.width = juliaSize; juliaInsetCanvas.height = juliaSize;
+
+function renderJuliaInset() {
+  if (!state.showJulia || state.fractalType !== 'mandelbrot') {
+    document.getElementById('juliaInset').style.display = 'none';
+    return;
+  }
+  document.getElementById('juliaInset').style.display = 'block';
+  var cre = state.hoveredX, cim = state.hoveredY;
+  var imageData = juliaCtx.createImageData(juliaSize, juliaSize);
+  var data = imageData.data;
+  var pal = PALETTES[state.palette].shader;
+  var maxIt = 128;
+  var juliaZoom = 0.28;
+  for (var py = 0; py < juliaSize; py++) {
+    for (var px = 0; px < juliaSize; px++) {
+      var zr = (px - juliaSize * 0.5) / juliaSize / juliaZoom;
+      var zi = -(py - juliaSize * 0.5) / juliaSize / juliaZoom;
+      var iter = 0, tr;
+      for (; iter < maxIt; iter++) {
+        tr = zr * zr - zi * zi + cre;
+        zi = 2 * zr * zi + cim;
+        zr = tr;
+        if (zr * zr + zi * zi > 256) break;
+      }
+      var idx = (py * juliaSize + px) * 4;
+      if (iter >= maxIt) {
+        data[idx] = 0; data[idx + 1] = 0; data[idx + 2] = 0; data[idx + 3] = 255;
+      } else {
+        var smoothI = iter - Math.log2(Math.log2(zr * zr + zi * zi)) + 4;
+        var t3 = Math.sqrt(smoothI / maxIt) * 2.5;
+        var r = pal.a[0] + pal.b[0] * Math.cos(6.28318 * (pal.c[0] * t3 + pal.d[0]));
+        var g = pal.a[1] + pal.b[1] * Math.cos(6.28318 * (pal.c[1] * t3 + pal.d[1]));
+        var b = pal.a[2] + pal.b[2] * Math.cos(6.28318 * (pal.c[2] * t3 + pal.d[2]));
+        data[idx] = Math.max(0, Math.min(255, r * 255));
+        data[idx + 1] = Math.max(0, Math.min(255, g * 255));
+        data[idx + 2] = Math.max(0, Math.min(255, b * 255));
+        data[idx + 3] = 255;
+      }
+    }
+  }
+  juliaCtx.putImageData(imageData, 0, 0);
+  document.getElementById('juliaLabel').textContent = 'Julia c = ' + formatComplex(cre, cim);
+}
+
+var juliaRenderTimer = null;
+glCanvas.addEventListener('mousemove', function() {
+  if (state.showJulia && state.fractalType === 'mandelbrot' && !isDragging) {
+    clearTimeout(juliaRenderTimer);
+    juliaRenderTimer = setTimeout(renderJuliaInset, 60);
+  }
+});
+
+// ============================================================
+// THREE.JS 3D HEIGHT-MAP
+// ============================================================
+var container3d = document.getElementById('puck3dContainer');
+var scene3d, camera3d, renderer3d, controls3d, heightMesh;
+
+function init3D() {
+  try {
+    scene3d = new THREE.Scene();
+    camera3d = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera3d.position.set(1.8, 1.4, 1.8);
+    renderer3d = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer3d.setSize(320, 320);
+    renderer3d.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container3d.insertBefore(renderer3d.domElement, container3d.firstChild);
+
+    controls3d = new THREE.OrbitControls(camera3d, renderer3d.domElement);
+    controls3d.enableZoom = false;
+    controls3d.enablePan = false;
+    controls3d.autoRotate = true;
+    controls3d.autoRotateSpeed = 0.8;
+    controls3d.target.set(0, 0.15, 0);
+    camera3d.lookAt(0, 0.15, 0);
+    controls3d.update();
+
+    var res = 80;
+    var geo = new THREE.PlaneGeometry(2, 2, res - 1, res - 1);
+    geo.rotateX(-Math.PI / 2);
+    var mat = new THREE.MeshBasicMaterial({
+      vertexColors: true, wireframe: true, transparent: true, opacity: 0.85
+    });
+    heightMesh = new THREE.Mesh(geo, mat);
+    scene3d.add(heightMesh);
+    update3DHeightMap();
+  } catch(e) {
+    console.error('3D init failed:', e);
+  }
+}
+
+function update3DHeightMap() {
+  if (!heightMesh) return;
+  var geo = heightMesh.geometry;
+  var pos = geo.attributes.position;
+  var colors = new Float32Array(pos.count * 3);
+  var pal = PALETTES[state.palette].shader;
+  var maxIt = 64;
+  var zm = Math.max(state.animZoom, 0.001);
+
+  for (var i = 0; i < pos.count; i++) {
+    var px = pos.getX(i), pz = pos.getZ(i);
+    // Match shader: c = uv / zoom + center (plane goes -1..1, same as normalized uv)
+    var cre = px / zm + state.animCenterX;
+    var cim = pz / zm + state.animCenterY;
+    var zr = 0, zi = 0, tr, iter = 0;
+    var cfg = fractalConfigs[state.fractalType];
+    if (cfg.type === 1) { zr = cre; zi = cim; cre = state.juliaX; cim = state.juliaY; }
+    for (; iter < maxIt; iter++) {
+      if (cfg.type === 2) { zr = Math.abs(zr); zi = Math.abs(zi); }
+      tr = zr * zr - zi * zi + cre;
+      zi = 2 * zr * zi + cim;
+      zr = tr;
+      if (zr * zr + zi * zi > 256) break;
+    }
+    var h = iter >= maxIt ? 0 : (iter / maxIt) * 0.8;
+    pos.setY(i, h);
+    var tc = iter >= maxIt ? 0 : Math.sqrt(iter / maxIt) * 2.5;
+    var r = pal.a[0] + pal.b[0] * Math.cos(6.28318 * (pal.c[0] * tc + pal.d[0]));
+    var g = pal.a[1] + pal.b[1] * Math.cos(6.28318 * (pal.c[1] * tc + pal.d[1]));
+    var b = pal.a[2] + pal.b[2] * Math.cos(6.28318 * (pal.c[2] * tc + pal.d[2]));
+    colors[i * 3] = Math.max(0, Math.min(1, r));
+    colors[i * 3 + 1] = Math.max(0, Math.min(1, g));
+    colors[i * 3 + 2] = Math.max(0, Math.min(1, b));
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
+var heightMapTimer = null;
+function scheduleHeightMapUpdate() {
+  clearTimeout(heightMapTimer);
+  heightMapTimer = setTimeout(update3DHeightMap, 300);
+}
+
+function animate3D() {
+  requestAnimationFrame(animate3D);
+  if (!renderer3d) return;
+  controls3d.update();
+  renderer3d.render(scene3d, camera3d);
+}
+
+init3D();
+animate3D();
+
+// ============================================================
+// MAIN ANIMATION LOOP
+// ============================================================
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function tick() {
+  requestAnimationFrame(tick);
+  var speed = 0.08;
+  var prevZoom = state.animZoom;
+  state.animZoom = lerp(state.animZoom, state.zoom, speed);
+  state.animCenterX = lerp(state.animCenterX, state.centerX, speed);
+  state.animCenterY = lerp(state.animCenterY, state.centerY, speed);
+  state.animIter = lerp(state.animIter, state.maxIter, speed);
+
+  if (Math.abs(state.animZoom - state.zoom) > 0.0001 ||
+      Math.abs(state.animCenterX - state.centerX) > 1e-10 ||
+      Math.abs(state.animCenterY - state.centerY) > 1e-10 ||
+      Math.abs(state.animIter - state.maxIter) > 0.5 ||
+      state.needsRender) {
+    renderFractal();
+    if (Math.abs(prevZoom - state.animZoom) > 0.01) scheduleHeightMapUpdate();
+  }
+
+  drawOverlay();
+}
+
+// Defer initial render to ensure layout is complete
+requestAnimationFrame(function() {
+  resizeOverlay();
+  state.needsRender = true;
+  renderFractal();
+  tick();
+});
+
+window.addEventListener('resize', function() {
+  resizeOverlay();
+  state.needsRender = true;
+  scheduleHeightMapUpdate();
+});
+
+// ============================================================
+// AMBIENT SOUND — 3 layered WAV loops with crossfade
+// ============================================================
+var audioCtx = null;
+var ambientGain = null;
+var ambientBuffers = [];
+var ambientNodes = [];
+var ambianceActive = false;
+var ambientFiles = ['audio/ambient-1.wav', 'audio/ambient-2.wav', 'audio/ambient-3.wav'];
+var ambientLoaded = false;
+
+function initAmbientSound() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  ambientGain = audioCtx.createGain();
+  ambientGain.gain.value = 0;
+  ambientGain.connect(audioCtx.destination);
+}
+
+function loadAmbientBuffers(cb) {
+  if (ambientLoaded) { if (cb) cb(); return; }
+  var loaded = 0;
+  ambientBuffers = new Array(ambientFiles.length);
+  ambientFiles.forEach(function(url, i) {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = 'arraybuffer';
+    xhr.onload = function() {
+      audioCtx.decodeAudioData(xhr.response, function(buf) {
+        ambientBuffers[i] = buf;
+        loaded++;
+        if (loaded === ambientFiles.length) { ambientLoaded = true; if (cb) cb(); }
+      });
+    };
+    xhr.onerror = function() { loaded++; if (loaded === ambientFiles.length && cb) cb(); };
+    xhr.send();
+  });
+}
+
+function createLoopNode(buffer, delaySeconds) {
+  var source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  // Crossfade: set loop points with margin so loops blend
+  var dur = buffer.duration;
+  var margin = 2.0; // 2s crossfade zone
+  source.loopStart = margin;
+  source.loopEnd = dur - margin;
+  var gain = audioCtx.createGain();
+  gain.gain.value = 0.5; // each layer at half volume for blend
+  source.connect(gain);
+  gain.connect(ambientGain);
+  source.start(audioCtx.currentTime + delaySeconds);
+  return { source: source, gain: gain };
+}
+
+function startAmbience() {
+  initAmbientSound();
+  if (ambianceActive) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  ambianceActive = true;
+  document.getElementById('ambianceBtn').classList.add('ambiance-on');
+
+  loadAmbientBuffers(function() {
+    // Stagger the 3 layers so they overlap naturally
+    ambientNodes = [];
+    for (var i = 0; i < ambientBuffers.length; i++) {
+      if (ambientBuffers[i]) {
+        ambientNodes.push(createLoopNode(ambientBuffers[i], i * 4)); // stagger 0s, 4s, 8s
+      }
+    }
+    // Fade in
+    ambientGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    ambientGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    ambientGain.gain.linearRampToValueAtTime(0.8, audioCtx.currentTime + 3);
+  });
+}
+
+function stopAmbience() {
+  if (!ambianceActive) return;
+  ambianceActive = false;
+  document.getElementById('ambianceBtn').classList.remove('ambiance-on');
+  if (!audioCtx) return;
+  ambientGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  ambientGain.gain.setValueAtTime(ambientGain.gain.value, audioCtx.currentTime);
+  ambientGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 2);
+  var nodes = ambientNodes;
+  ambientNodes = [];
+  setTimeout(function() {
+    nodes.forEach(function(n) { try { n.source.stop(); } catch(e){} });
+  }, 3000);
+}
+
+document.getElementById('ambianceBtn').addEventListener('click', function() {
+  if (ambianceActive) stopAmbience(); else startAmbience();
+});
+
+// Tour ambient: 5-7s intro before narration, duck during, swell after, then fade out
+function tourStartAmbient() {
+  initAmbientSound();
+  if (!ambianceActive) {
+    ambianceActive = true;
+    document.getElementById('ambianceBtn').classList.add('ambiance-on');
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  loadAmbientBuffers(function() {
+    ambientNodes = [];
+    for (var i = 0; i < ambientBuffers.length; i++) {
+      if (ambientBuffers[i]) {
+        ambientNodes.push(createLoopNode(ambientBuffers[i], i * 3));
+      }
+    }
+    ambientGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    ambientGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    ambientGain.gain.linearRampToValueAtTime(0.85, audioCtx.currentTime + 5);
+  });
+}
+
+function tourDuckAmbient() {
+  if (!audioCtx) return;
+  ambientGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  ambientGain.gain.setValueAtTime(ambientGain.gain.value, audioCtx.currentTime);
+  ambientGain.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 2);
+}
+
+function tourUnduckAmbient() {
+  if (!audioCtx) return;
+  ambientGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  ambientGain.gain.setValueAtTime(ambientGain.gain.value, audioCtx.currentTime);
+  ambientGain.gain.linearRampToValueAtTime(0.85, audioCtx.currentTime + 3);
+}
+
+function tourFadeOutAmbient() {
+  if (!audioCtx) return;
+  // Swell back up for 15s, then fade to silence
+  ambientGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  ambientGain.gain.setValueAtTime(ambientGain.gain.value, audioCtx.currentTime);
+  ambientGain.gain.linearRampToValueAtTime(0.85, audioCtx.currentTime + 3);
+  ambientGain.gain.setValueAtTime(0.85, audioCtx.currentTime + 15);
+  ambientGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 22);
+  setTimeout(function() {
+    ambianceActive = false;
+    document.getElementById('ambianceBtn').classList.remove('ambiance-on');
+    ambientNodes.forEach(function(n) { try { n.source.stop(); } catch(e){} });
+    ambientNodes = [];
+  }, 23000);
+}
+
+// ============================================================
+// TOUR SYSTEM
+// ============================================================
+var tourAudio = null;
+var tour = {
+  active: false, chapter: 0, paused: false,
+  elapsed: 0, actionIndex: 0, chapterStartTime: 0, captionEl: null
+};
+
+var tourChapters = [
+  {
+    id: '01-iteration',
+    title: 'The Language of Iteration',
+    caption: "Take any number. Square it and add a constant. Take the result, square it, add the same constant. Repeat \u2014 forever. This absurdly simple rule is the seed of infinite complexity. What you see before you is the Mandelbrot set: a map of every possible constant c in the complex plane, colored by what happens when you iterate z squared plus c from zero. Black points stay bounded \u2014 their orbits never escape. Colored points flee to infinity, and the color tells you how quickly they leave. The boundary between bounded and unbounded is infinitely intricate \u2014 zoom in anywhere along it and you\u2019ll find spirals, tendrils, and miniature copies of the whole set, repeating at every scale. This is the fingerprint of chaos: simple rules producing structure so rich that no amount of magnification ever exhausts it.",
+    duration: 60,
+    actions: [
+      { t: 0, fn: function() {
+        tourStartAmbient();
+        setTourFractal('mandelbrot');
+        setTourView(-0.5, 0, 0.3, 256);
+        state.showOrbits = false; state.showCrosshair = false;
+        document.getElementById('crosshairToggle').classList.remove('on');
+        document.getElementById('orbitToggle').classList.remove('on');
+      }},
+      { t: 6, fn: function() { tourDuckAmbient(); }},
+      { t: 42, fn: function() { setTourView(-0.7463, 0.1102, 80, 512); }}
+    ]
+  },
+  {
+    id: '02-mandelbrot',
+    title: 'Anatomy of the Mandelbrot Set',
+    caption: "The main body of the Mandelbrot set is a perfect cardioid \u2014 a heart-shaped curve from analytic geometry. Attached to it is the period-two bulb, a perfect circle, where orbits bounce between two values forever. Along the boundary, smaller bulbs sprout in a precise pattern governed by Farey arithmetic and the Fibonacci sequence. Between the cardioid and the period-two bulb lies Seahorse Valley \u2014 zoom in and you find an explosion of double spirals, each arm containing miniature copies of the full set. On the opposite side, Elephant Valley unfurls trunk-like tendrils. Every bulb corresponds to a periodic orbit. The period-three bulb sits at the tip of one of the largest antenna filaments. Sharkovskii\u2019s theorem tells us that period three implies chaos \u2014 meaning that near any period-three orbit, orbits of every other period also exist. The Mandelbrot set is not just a pretty picture. It is a complete catalog of dynamical behavior for the family z squared plus c. Every qualitative change in dynamics \u2014 every bifurcation, every transition from order to chaos \u2014 is encoded in this single image.",
+    duration: 77,
+    actions: [
+      { t: 0, fn: function() {
+        tourUnduckAmbient();
+        setTourView(-0.5, 0, 0.3, 256);
+        state.showOrbits = false; state.showCrosshair = false;
+        document.getElementById('orbitToggle').classList.remove('on');
+        document.getElementById('crosshairToggle').classList.remove('on');
+      }},
+      { t: 3, fn: function() { tourDuckAmbient(); }},
+      { t: 18, fn: function() { setTourView(-0.7463, 0.1102, 80, 512); }},
+      { t: 45, fn: function() { setTourView(0.2819, 0.0100, 40, 512); }},
+      { t: 68, fn: function() { setTourView(-0.5, 0, 0.3, 256); }}
+    ]
+  },
+  {
+    id: '03-julia',
+    title: 'Julia Sets \u2014 The Dual World',
+    caption: "Every single point in the Mandelbrot set has a twin \u2014 a Julia set. Fix the constant c and let the starting point z vary across the complex plane. If c lies inside the Mandelbrot set, its Julia set is a connected, single piece. If c lies outside, the Julia set shatters into Cantor dust \u2014 infinitely many disconnected points. This is the Fatou-Julia theorem, and it gives the Mandelbrot set its deepest meaning: it is the map of connectivity for Julia sets. Watch the Julia preview as we trace along the Mandelbrot boundary. Near the cusp of the cardioid, Julia sets look like pinched circles. Near the period-two bulb, they resemble the Douady rabbit with three ears. At the Misiurewicz points \u2014 where the boundary is sharpest \u2014 Julia sets become dendrites, tree-like structures with no interior at all. Gaston Julia and Pierre Fatou described these sets in 1918, decades before computers could visualize them. They worked entirely from formal analysis, proving theorems about objects they could never see. When Benoit Mandelbrot finally rendered them in 1979, the mathematical world was stunned by their beauty.",
+    duration: 80,
+    actions: [
+      { t: 0, fn: function() {
+        tourUnduckAmbient();
+        setTourView(-0.5, 0, 0.3, 256);
+        state.showJulia = true;
+        document.getElementById('juliaToggle').classList.add('on');
+        document.getElementById('juliaInset').style.display = 'block';
+      }},
+      { t: 3, fn: function() { tourDuckAmbient(); }},
+      { t: 28, fn: function() {
+        setTourFractal('julia');
+        state.juliaX = -0.7; state.juliaY = 0.27;
+        setTourView(0, 0, 0.35, 256);
+      }},
+      { t: 50, fn: function() { state.juliaX = -0.123; state.juliaY = 0.745; state.needsRender = true; scheduleHeightMapUpdate(); }},
+      { t: 70, fn: function() {
+        setTourFractal('mandelbrot');
+        setTourView(-0.5, 0, 0.3, 256);
+        state.showJulia = false;
+        document.getElementById('juliaToggle').classList.remove('on');
+        document.getElementById('juliaInset').style.display = 'none';
+      }}
+    ]
+  },
+  {
+    id: '04-zoo',
+    title: 'The Fractal Zoo',
+    caption: "The Mandelbrot set is just one species in a vast menagerie of fractals. The Burning Ship fractal uses the same iteration rule but takes the absolute value of the real and imaginary parts before squaring. This tiny asymmetry shatters the rotational symmetry, creating a shape that eerily resembles a burning galleon. Zoom into its main antenna and you find structures unlike anything in the Mandelbrot set \u2014 jagged, aggressive, and deeply alien. Newton\u2019s method fractal reveals something different entirely. Apply Newton\u2019s root-finding algorithm to z cubed minus one, and the complex plane partitions into three basins of attraction \u2014 one for each cube root of unity. The boundaries between these basins form a fractal of extraordinary delicacy. Every boundary point is simultaneously on the boundary of all three basins \u2014 a topological property called Wada boundaries that defies everyday intuition. These fractals share a common ancestor: the theory of holomorphic dynamics developed by Julia, Fatou, Mandelbrot, Douady, and Hubbard. Every rational function on the complex plane produces its own fractal partition, each a unique window into the interplay of attraction and repulsion.",
+    duration: 83,
+    actions: [
+      { t: 0, fn: function() { tourUnduckAmbient(); setTourFractal('mandelbrot'); setTourView(-0.5, 0, 0.3, 256); }},
+      { t: 3, fn: function() { tourDuckAmbient(); }},
+      { t: 10, fn: function() { setTourFractal('burningShip'); setTourView(-0.4, -0.5, 0.3, 256); }},
+      { t: 40, fn: function() { setTourFractal('newton'); setTourView(0, 0, 0.4, 64); }},
+      { t: 72, fn: function() { setTourFractal('mandelbrot'); setTourView(-0.5, 0, 0.3, 256); }}
+    ]
+  },
+  {
+    id: '05-chaos',
+    title: 'Chaos, Beauty, and the Edge of Knowledge',
+    caption: "What connects all of this is chaos theory \u2014 the study of systems where simple deterministic rules produce behavior so complex it appears random. Edward Lorenz discovered this in 1963 while modeling weather: tiny rounding errors in initial conditions led to completely different forecasts. He called it the butterfly effect. The Mandelbrot set is the purest visual expression of this principle. Two points separated by a billionth of a pixel can have completely different fates \u2014 one bounded forever, the other escaping in ten iterations. That hypersensitivity to initial conditions is the mathematical definition of chaos. And yet chaos is not randomness. It has structure. The Feigenbaum constants \u2014 4.669 and 2.502 \u2014 appear universally in the transition from order to chaos, whether you\u2019re studying dripping faucets, population models, electronic circuits, or these fractals. Mitchell Feigenbaum discovered that every route to chaos follows the same scaling law, a universality as profound as anything in physics. Fractals are not just mathematics. They are nature\u2019s geometry \u2014 the shape of coastlines, clouds, blood vessels, lightning, galaxies. Mandelbrot called them the geometry of nature, and he was right. The boundary of the Mandelbrot set, with its infinite complexity emerging from z squared plus c, is a reminder that the universe runs on simple rules \u2014 and those rules are capable of generating everything we see.",
+    duration: 101,
+    actions: [
+      { t: 0, fn: function() {
+        tourUnduckAmbient();
+        setTourFractal('mandelbrot'); setTourView(-0.5, 0, 0.3, 256);
+        state.showOrbits = false; state.showCrosshair = false;
+        document.getElementById('orbitToggle').classList.remove('on');
+        document.getElementById('crosshairToggle').classList.remove('on');
+      }},
+      { t: 3, fn: function() { tourDuckAmbient(); }},
+      { t: 30, fn: function() { setTourView(-0.7463, 0.1102, 80, 512); }},
+      { t: 65, fn: function() { setTourView(-0.5, 0, 0.3, 256); }},
+      { t: 93, fn: function() { tourFadeOutAmbient(); }}
+    ]
+  }
+];
+
+function setTourFractal(fType) {
+  state.fractalType = fType;
+  document.querySelectorAll('#fractalGroup .gbtn').forEach(function(b) { b.classList.toggle('on', b.dataset.fractal === fType); });
+  state.needsRender = true;
+  scheduleHeightMapUpdate();
+}
+
+function setTourView(cx, cy, zoom, iter) {
+  state.centerX = cx; state.centerY = cy;
+  state.zoom = zoom; state.maxIter = iter;
+  state.needsRender = true;
+  updateStats();
+  scheduleHeightMapUpdate();
+}
+
+function createCaption(text) {
+  var existing = document.querySelector('.tour-caption');
+  if (existing) existing.remove();
+  var el = document.createElement('div');
+  el.className = 'tour-caption';
+  for (var i = 0; i < text.length; i++) {
+    var span = document.createElement('span');
+    span.className = 'tour-char';
+    span.textContent = text[i];
+    el.appendChild(span);
+  }
+  document.body.appendChild(el);
+  tour.captionEl = el;
+  return el;
+}
+
+function revealChars(elapsed, duration, totalChars) {
+  if (!tour.captionEl) return;
+  var chars = tour.captionEl.querySelectorAll('.tour-char');
+  var progress = elapsed / duration;
+  var revealed = Math.floor(progress * totalChars * 1.1);
+  for (var i = 0; i < chars.length; i++) {
+    chars[i].classList.toggle('revealed', i < revealed);
+  }
+  // If content overflows, hide older text to make room
+  var el = tour.captionEl;
+  if (el.scrollHeight > el.clientHeight) {
+    for (var i = 0; i < revealed; i++) {
+      if (el.scrollHeight <= el.clientHeight) break;
+      chars[i].style.display = 'none';
+    }
+  }
+}
+
+var progressEl = document.getElementById('tourProgress');
+tourChapters.forEach(function() {
+  var pip = document.createElement('div');
+  pip.className = 'tour-pip';
+  progressEl.appendChild(pip);
+});
+
+function updatePips() {
+  var pips = progressEl.querySelectorAll('.tour-pip');
+  pips.forEach(function(p, i) {
+    p.classList.toggle('active', i === tour.chapter);
+    p.classList.toggle('done', i < tour.chapter);
+  });
+}
+
+function startTour() {
+  tour.active = true; tour.chapter = 0; tour.paused = false;
+  document.body.classList.add('tour-active');
+  playChapter(0);
+}
+
+function playChapter(idx) {
+  if (idx >= tourChapters.length) { endTour(); return; }
+  tour.chapter = idx; tour.elapsed = 0; tour.actionIndex = 0;
+  tour.chapterStartTime = performance.now();
+  updatePips();
+  var ch = tourChapters[idx];
+  createCaption(ch.caption);
+  if (tourAudio) { tourAudio.pause(); tourAudio = null; }
+  tourAudio = new Audio('audio/' + ch.id + '.mp3');
+  tourAudio.play().catch(function(){});
+  tourAudio.addEventListener('ended', function() {
+    setTimeout(function() { if (tour.active && !tour.paused) playChapter(idx + 1); }, 4000);
+  });
+  ch.actions.forEach(function(a) { if (a.t === 0) a.fn(); });
+  tour.actionIndex = ch.actions.filter(function(a) { return a.t === 0; }).length;
+  tourTick();
+}
+
+function tourTick() {
+  if (!tour.active) return;
+  requestAnimationFrame(tourTick);
+  if (tour.paused) return;
+  var ch = tourChapters[tour.chapter];
+  tour.elapsed = (performance.now() - tour.chapterStartTime) / 1000;
+  while (tour.actionIndex < ch.actions.length && ch.actions[tour.actionIndex].t <= tour.elapsed) {
+    ch.actions[tour.actionIndex].fn();
+    tour.actionIndex++;
+  }
+  revealChars(tour.elapsed, ch.duration, ch.caption.length);
+}
+
+function endTour() {
+  tour.active = false;
+  document.body.classList.remove('tour-active');
+  if (tourAudio) { tourAudio.pause(); tourAudio = null; }
+  var cap = document.querySelector('.tour-caption');
+  if (cap) cap.remove();
+  tourFadeOutAmbient();
+}
+
+document.getElementById('tourBtn').addEventListener('click', function() { if (!tour.active) startTour(); });
+document.getElementById('tourPauseBtn').addEventListener('click', function() {
+  tour.paused = !tour.paused;
+  if (tour.paused) {
+    if (tourAudio) tourAudio.pause();
+    this.querySelector('.material-symbols-outlined').textContent = 'play_arrow';
+  } else {
+    if (tourAudio) tourAudio.play().catch(function(){});
+    tour.chapterStartTime = performance.now() - tour.elapsed * 1000;
+    this.querySelector('.material-symbols-outlined').textContent = 'pause';
+    tourTick();
+  }
+});
+document.getElementById('tourSkipBtn').addEventListener('click', function() {
+  if (tourAudio) { tourAudio.pause(); tourAudio = null; }
+  playChapter(tour.chapter + 1);
+});
+document.getElementById('tourExitBtn').addEventListener('click', endTour);
+
+// ============================================================
+// AUDIO PRELOAD
+// ============================================================
+tourChapters.forEach(function(ch) {
+  var link = document.createElement('link');
+  link.rel = 'prefetch';
+  link.href = 'audio/' + ch.id + '.mp3';
+  document.head.appendChild(link);
+});
+
+</script>
+</body>
+</html>
