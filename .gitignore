@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Editor / assistant scratch
+.claude/
+.cursor/
+.vscode/
+
+# Local scratch
+_to_delete/
+scratch/
